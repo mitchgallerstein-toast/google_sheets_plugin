@@ -25,7 +25,7 @@ https://developers.google.com/api-client-library/python/guide/aaa_client_secrets
 """
 
 import time
-from apiclient.discovery import build
+from googleapiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 from oauth2client.client import AccessTokenCredentials
 
@@ -37,8 +37,8 @@ class GoogleHook(BaseHook):
         self.google_analytics_conn_id = google_conn_id
         self.connection = self.get_connection(google_conn_id)
 
-        if self.connection.extra_dejson.get('client_secrets', None):
-            self.client_secrets = self.connection.extra_dejson['client_secrets']
+        if self.connection.extra_dejson:
+            self.client_secrets = self.connection.extra_dejson
 
     def get_service_object(self,
                            api_name,
@@ -64,7 +64,8 @@ class GoogleHook(BaseHook):
                              include_empty_rows):
         analytics = self.get_service_object('analyticsreporting',
                                             'v4',
-                                            ['https://www.googleapis.com/auth/analytics.readonly'])
+                                            ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+                                            )
 
         reportRequest = {
             'viewId': view_id,

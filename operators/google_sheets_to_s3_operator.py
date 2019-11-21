@@ -8,7 +8,7 @@ import boa
 from airflow.hooks.S3_hook import S3Hook
 from airflow.hooks.base_hook import BaseHook
 from airflow.models import BaseOperator, Variable
-from google_plugin.hooks.google_hook import GoogleHook
+from google_sheets_plugin.hooks.google_hook import GoogleHook
 
 from six import BytesIO
 
@@ -77,7 +77,9 @@ class GoogleSheetsToS3Operator(BaseOperator):
         else:
             sheet_names = self.sheet_names
 
-        sheets_object = g_conn.get_service_object('sheets', 'v4')
+        sheets_object = g_conn.get_service_object('sheets', 'v4', 
+                                                    ['https://spreadsheets.google.com/feeds', 
+                                                     'https://www.googleapis.com/auth/drive'])
         logging.info('Retrieved Sheets Object')
 
         response = sheets_object.spreadsheets().get(spreadsheetId=self.sheet_id,
@@ -91,12 +93,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
         total_sheets = []
         for sheet in sheets:
             name = sheet.get('properties').get('title')
-            name = boa.constrict(name)
+            #name = boa.constrict(name)
             total_sheets.append(name)
 
             if self.sheet_names:
                 if name not in sheet_names:
-                    logging.info('{} is not found in available sheet names.'.format(name))
+                    print('{} is not found in available sheet names.'.format(name))
                     continue
 
             table_name = name
@@ -129,6 +131,8 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
             file_name, file_extension = os.path.splitext(self.s3_key)
 
+            sheet = boa.constrict(sheet)
+            
             output_name = ''.join([file_name, '_', sheet, file_extension])
 
             if self.include_schema is True:

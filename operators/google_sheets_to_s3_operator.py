@@ -45,11 +45,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
                  sheet_id,
                  s3_conn_id,
                  s3_key,
-                 compression_bound,
+                 compression_bound=10000,
                  include_schema=False,
                  sheet_names=[],
                  range=None,
                  output_format='json',
+                 s3_bucket=os.getenv('bucket_name'),
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -63,6 +64,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
         self.range = range
         self.output_format = output_format.lower()
         self.compression_bound = compression_bound
+        self.s3_bucket = s3_bucket
         if self.output_format not in ('json'):
             raise Exception('Acceptable output formats are: json.')
 
@@ -77,8 +79,8 @@ class GoogleSheetsToS3Operator(BaseOperator):
         else:
             sheet_names = self.sheet_names
 
-        sheets_object = g_conn.get_service_object('sheets', 'v4', 
-                                                    ['https://spreadsheets.google.com/feeds', 
+        sheets_object = g_conn.get_service_object('sheets', 'v4',
+                                                    ['https://spreadsheets.google.com/feeds',
                                                      'https://www.googleapis.com/auth/drive'])
         logging.info('Retrieved Sheets Object')
 
@@ -93,7 +95,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
         total_sheets = []
         for sheet in sheets:
             name = sheet.get('properties').get('title')
-            #name = boa.constrict(name)
+
             total_sheets.append(name)
 
             if self.sheet_names:
@@ -129,16 +131,18 @@ class GoogleSheetsToS3Operator(BaseOperator):
         for sheet in final_output:
             output_data = final_output.get(sheet)
 
-            file_name, file_extension = os.path.splitext(self.s3_key)
+            file_name = os.path.splitext(self.s3_key)[0]
 
             sheet = boa.constrict(sheet)
-            
-            output_name = ''.join([file_name, '_', sheet, file_extension])
+
+            output_name = ''.join([file_name, '_', sheet, self.output_format])
 
             if self.include_schema is True:
-                schema_name = ''.join([file_name, '_', sheet, '_schema', file_extension])
+                schema_name = ''.join([file_name, '_', sheet, '_schema', self.output_format])
+                self.output_manager(s3, output_name, output_data, context, sheet, schema_name)
+            else:
+                self.output_manager(s3, output_name, output_data, context, sheet)
 
-            self.output_manager(s3, output_name, output_data, context, sheet, schema_name)
 
         dag_id = context['ti'].dag_id
 
@@ -148,12 +152,11 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
         return boa.constrict(title)
 
-    def output_manager(self, s3, output_name, output_data, context, sheet_name, schema_name=None):
-        self.s3_bucket = BaseHook.get_connection(self.s3_conn_id).host
+    def output_manager(self, s3, output_name, output_data, context, sheet_name,
+                        schema_name=None):
         if self.output_format == 'json':
-            output = '\n'.join([json.dumps({boa.constrict(str(k)): v
-                                            for k, v in record.items()})
-                                for record in output_data])
+            output = [json.dumps({k: v for k, v in record.items()})
+                      for record in output_data]
 
             enc_output = str.encode(output, 'utf-8')
 

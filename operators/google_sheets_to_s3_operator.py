@@ -82,7 +82,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
         sheets_object = g_conn.get_service_object('sheets', 'v4',
                                                     ['https://spreadsheets.google.com/feeds',
                                                      'https://www.googleapis.com/auth/drive'])
-        logging.info('Retrieved Sheets Object')
+        print('Retrieved Sheets Object')
 
         response = sheets_object.spreadsheets().get(spreadsheetId=self.sheet_id,
                                                     includeGridData=True).execute()
@@ -162,7 +162,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
             # if file is more than bound then apply gzip compression
             if len(enc_output) / 1024 / 1024 >= self.compression_bound:
-                logging.info("File is more than {}MB, gzip compression will be applied".format(self.compression_bound))
+                print("File is more than {}MB, gzip compression will be applied".format(self.compression_bound))
                 output = gzip.compress(enc_output, compresslevel=5)
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="compressed")
                 self.load_bytes(s3,
@@ -172,7 +172,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
                                 replace=True
                                 )
             else:
-                logging.info("File is less than {}MB, compression will not be applied".format(self.compression_bound))
+                print("File is less than {}MB, compression will not be applied".format(self.compression_bound))
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="non-compressed")
                 s3.load_string(
                     string_data=output,
@@ -194,7 +194,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
                     replace=True
                 )
 
-            logging.info('Successfully output of "{}" to S3.'.format(output_name))
+            print('Successfully output of "{}" to S3.'.format(output_name))
 
         # TODO -- Add support for csv output
 

@@ -33,18 +33,18 @@ class GoogleSheetsToS3Operator(BaseOperator):
     :type include_schema:     boolean
     :param s3_conn_id:        The s3 connection id.
     :type s3_conn_id:         string
-    :param s3_key:            The S3 key to be used to store the
+    :param s3_path:            The S3 key to be used to store the
                               retrieved data.
-    :type s3_key:             string
+    :type s3_path:             string
     """
 
-    template_fields = ('s3_key',)
+    template_fields = ('s3_path',)
 
     def __init__(self,
                  google_conn_id,
                  sheet_id,
                  s3_conn_id,
-                 s3_key,
+                 s3_path,
                  compression_bound=10000,
                  include_schema=False,
                  sheet_names=[],
@@ -59,7 +59,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
         self.sheet_id = sheet_id
         self.sheet_names = sheet_names
         self.s3_conn_id = s3_conn_id
-        self.s3_key = s3_key
+        self.s3_path = s3_path
         self.include_schema = include_schema
         self.range = range
         self.output_format = output_format.lower()
@@ -131,17 +131,27 @@ class GoogleSheetsToS3Operator(BaseOperator):
         for sheet in final_output:
             output_data = final_output.get(sheet)
 
-            file_name = os.path.splitext(self.s3_key)[0]
+            file_name = os.path.splitext(self.s3_path)[0]
 
             sheet = boa.constrict(sheet)
 
-            output_name = ''.join([file_name, '_', sheet, self.output_format])
+            if self.s3_path[-1] != '/':
+                self.s3_path = ''.join([self.s3_path, '/'])
+
+            if self.s3_path[0] == '/':
+                self.s3_path = self.s3_path[1:]
+
+            output_name = ''.join([self.s3_path, sheet,
+                                   '.', self.output_format])
 
             if self.include_schema is True:
-                schema_name = ''.join([file_name, '_', sheet, '_schema', self.output_format])
-                self.output_manager(s3, output_name, output_data, context, sheet, schema_name)
+                schema_name = ''.join([self.s3_path, sheet,
+                                      '_schema', '.', self.output_format])
+                self.output_manager(s3, output_name, output_data,
+                                    context, sheet, schema_name)
             else:
-                self.output_manager(s3, output_name, output_data, context, sheet)
+                self.output_manager(s3, output_name, output_data,
+                                    context, sheet)
 
 
         dag_id = context['ti'].dag_id

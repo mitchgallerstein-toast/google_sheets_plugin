@@ -159,8 +159,11 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
     def output_manager(self, s3, output_name, output_data, context, sheet_name):
         if self.output_format == 'json':
+            output = '\n'.join([json.dumps({boa.constrict(str(k)): v
+                                            for k, v in record.items()})
+                                for record in output_data])
 
-            enc_output = str.encode(output_data, 'utf-8')
+            enc_output = str.encode(output, 'utf-8')
 
             # if file is more than bound then apply gzip compression
             if len(enc_output) / 1024 / 1024 >= self.compression_bound:

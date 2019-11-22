@@ -140,14 +140,17 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
             sheet = boa.constrict(sheet)
 
+            output_name = ''.join([self.s3_path, '/', sheet,
+                                   '.', self.output_format])
+
             if self.include_schema is True:
-                output_name = ''.join([self.s3_path, '/', sheet,
+                schema_name = ''.join([self.s3_path, '/', sheet,
                                       '_schema', '.', self.output_format])
             else:
-                output_name = ''.join([self.s3_path, '/', sheet,
-                                       '.', self.output_format])
+                schema_name = None
 
-            self.output_manager(s3, output_name, output_data, context, sheet)
+            self.output_manager(s3, output_name, output_data, context,
+                                sheet, schema_name)
 
         dag_id = context['ti'].dag_id
 
@@ -157,7 +160,8 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
         return boa.constrict(title)
 
-    def output_manager(self, s3, output_name, output_data, context, sheet_name):
+    def output_manager(self, s3, output_name, output_data, context,
+                        sheet_name, schema_name):
         if self.output_format == 'json':
             output = '\n'.join([json.dumps({boa.constrict(str(k)): v
                                             for k, v in record.items()})
@@ -194,7 +198,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
                 s3.load_string(
                     string_data=json.dumps(schema),
-                    key=output_name,
+                    key=schema_name,
                     bucket_name=self.s3_bucket,
                     replace=True
                 )

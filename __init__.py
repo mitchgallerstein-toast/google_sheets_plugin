@@ -14,3 +14,4 @@ class google_sheets_plugin(AirflowPlugin):
     admin_views = []
     flask_blueprints = []
     menu_links = []
+

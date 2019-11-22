@@ -17,25 +17,30 @@ class GoogleSheetsToS3Operator(BaseOperator):
     """
     Google Sheets To S3 Operator
 
-    :param google_conn_id:    The Google connection id.
+    :param google_conn_id:    The Google connection id. Please see the
+                              GoogleHook for more information about this.
     :type google_conn_id:     string
-    :param sheet_id:          The id for associated report.
+    :param sheet_id:          The id for associated report. This is in the URL
+                              of the sheet.
     :type sheet_id:           string
-    :param sheet_names:       The name for the relevent sheets in the report.
+    :param s3_conn_id:        The s3 connection id. This is defined in airflow
+                              connections in the UI.
+    :type s3_conn_id:         string
+    :param s3_path:           The S3 file path for where the data should go.
+                              Cannot be NULL.
+    :type s3_path:            string
+    :param include_schema:    If set to true, infer the schema of the data and
+                              output to S3 as a separate file
+    :type include_schema:     boolean
+    :param sheet_names:       The names for the relevent sheets in the report.
     :type sheet_names:        string/array
     :param range:             The range of of cells containing the relevant data.
                               This must be the same for all sheets if multiple
                               are being pulled together.
                               Example: Sheet1!A2:E80
     :type range:              string
-    :param include_schema:    If set to true, infer the schema of the data and
-                              output to S3 as a separate file
-    :type include_schema:     boolean
-    :param s3_conn_id:        The s3 connection id.
-    :type s3_conn_id:         string
-    :param s3_path:            The S3 key to be used to store the
-                              retrieved data.
-    :type s3_path:             string
+    :param s3_bucket:         The s3 bucket this file should be dropped into.
+    :type s3_bucket:          string
     """
 
     template_fields = ('s3_path',)
@@ -50,7 +55,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
                  sheet_names=[],
                  range=None,
                  output_format='json',
-                 s3_bucket=os.getenv('bucket_name'),
+                 s3_bucket,
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)

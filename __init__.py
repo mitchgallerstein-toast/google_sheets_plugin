@@ -1,7 +1,7 @@
 from airflow.plugins_manager import AirflowPlugin
 
-from google_plugin.hooks.google_hook import GoogleHook
-from google_plugin.operators.google_sheets_to_s3_operator import GoogleSheetsToS3Operator
+from google_sheets_plugin.hooks.google_hook import GoogleHook
+from google_sheets_plugin.operators.google_sheets_to_s3_operator import GoogleSheetsToS3Operator
 
 
 class google_sheets_plugin(AirflowPlugin):

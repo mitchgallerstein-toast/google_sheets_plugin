@@ -163,7 +163,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
     def output_manager(self, s3, output_name, output_data, context,
                         sheet_name, schema_name):
         if self.output_format == 'json':
-            output = '\n'.join([json.dumps({boa.constrict(str(k)): v
+            output = '\n'.join([json.dumps({str(k): v
                                             for k, v in record.items()})
                                 for record in output_data])
 

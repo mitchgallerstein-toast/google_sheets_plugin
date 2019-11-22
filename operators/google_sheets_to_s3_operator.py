@@ -50,12 +50,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
                  sheet_id,
                  s3_conn_id,
                  s3_path,
+                 s3_bucket,
                  compression_bound=10000,
                  include_schema=False,
                  sheet_names=[],
                  range=None,
                  output_format='json',
-                 s3_bucket,
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)

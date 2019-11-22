@@ -8,7 +8,7 @@ import boa
 from airflow.hooks.S3_hook import S3Hook
 from airflow.hooks.base_hook import BaseHook
 from airflow.models import BaseOperator, Variable
-from google_plugin.hooks.google_hook import GoogleHook
+from google_sheets_plugin.hooks.google_hook import GoogleHook
 
 from six import BytesIO
 
@@ -17,39 +17,45 @@ class GoogleSheetsToS3Operator(BaseOperator):
     """
     Google Sheets To S3 Operator
 
-    :param google_conn_id:    The Google connection id.
+    :param google_conn_id:    The Google connection id. Please see the
+                              GoogleHook for more information about this.
     :type google_conn_id:     string
-    :param sheet_id:          The id for associated report.
+    :param sheet_id:          The id for associated report. This is in the URL
+                              of the sheet.
     :type sheet_id:           string
-    :param sheet_names:       The name for the relevent sheets in the report.
+    :param s3_conn_id:        The s3 connection id. This is defined in airflow
+                              connections in the UI.
+    :type s3_conn_id:         string
+    :param s3_path:           The S3 file path for where the data should go.
+                              Cannot be NULL.
+    :type s3_path:            string
+    :param include_schema:    If set to true, infer the schema of the data and
+                              output to S3 as a separate file
+    :type include_schema:     boolean
+    :param sheet_names:       The names for the relevent sheets in the report.
     :type sheet_names:        string/array
     :param range:             The range of of cells containing the relevant data.
                               This must be the same for all sheets if multiple
                               are being pulled together.
                               Example: Sheet1!A2:E80
     :type range:              string
-    :param include_schema:    If set to true, infer the schema of the data and
-                              output to S3 as a separate file
-    :type include_schema:     boolean
-    :param s3_conn_id:        The s3 connection id.
-    :type s3_conn_id:         string
-    :param s3_key:            The S3 key to be used to store the
-                              retrieved data.
-    :type s3_key:             string
+    :param s3_bucket:         The s3 bucket this file should be dropped into.
+    :type s3_bucket:          string
     """
 
-    template_fields = ('s3_key',)
+    template_fields = ('s3_path',)
 
     def __init__(self,
                  google_conn_id,
                  sheet_id,
                  s3_conn_id,
-                 s3_key,
-                 compression_bound,
+                 s3_path,
+                 compression_bound=10000,
                  include_schema=False,
                  sheet_names=[],
                  range=None,
                  output_format='json',
+                 s3_bucket,
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -58,11 +64,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
         self.sheet_id = sheet_id
         self.sheet_names = sheet_names
         self.s3_conn_id = s3_conn_id
-        self.s3_key = s3_key
+        self.s3_path = s3_path.strip('/')
         self.include_schema = include_schema
         self.range = range
         self.output_format = output_format.lower()
         self.compression_bound = compression_bound
+        self.s3_bucket = s3_bucket
         if self.output_format not in ('json'):
             raise Exception('Acceptable output formats are: json.')
 
@@ -77,8 +84,10 @@ class GoogleSheetsToS3Operator(BaseOperator):
         else:
             sheet_names = self.sheet_names
 
-        sheets_object = g_conn.get_service_object('sheets', 'v4')
-        logging.info('Retrieved Sheets Object')
+        sheets_object = g_conn.get_service_object('sheets', 'v4',
+                                                    ['https://spreadsheets.google.com/feeds',
+                                                     'https://www.googleapis.com/auth/drive'])
+        print('Retrieved Sheets Object')
 
         response = sheets_object.spreadsheets().get(spreadsheetId=self.sheet_id,
                                                     includeGridData=True).execute()
@@ -91,12 +100,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
         total_sheets = []
         for sheet in sheets:
             name = sheet.get('properties').get('title')
-            name = boa.constrict(name)
+
             total_sheets.append(name)
 
             if self.sheet_names:
                 if name not in sheet_names:
-                    logging.info('{} is not found in available sheet names.'.format(name))
+                    print('{} is not found in available sheet names.'.format(name))
                     continue
 
             table_name = name
@@ -127,14 +136,18 @@ class GoogleSheetsToS3Operator(BaseOperator):
         for sheet in final_output:
             output_data = final_output.get(sheet)
 
-            file_name, file_extension = os.path.splitext(self.s3_key)
+            file_name = os.path.splitext(self.s3_path)[0]
 
-            output_name = ''.join([file_name, '_', sheet, file_extension])
+            sheet = boa.constrict(sheet)
 
             if self.include_schema is True:
-                schema_name = ''.join([file_name, '_', sheet, '_schema', file_extension])
+                output_name = ''.join([self.s3_path, '/', sheet,
+                                      '_schema', '.', self.output_format])
+            else:
+                output_name = ''.join([self.s3_path, '/', sheet,
+                                       '.', self.output_format])
 
-            self.output_manager(s3, output_name, output_data, context, sheet, schema_name)
+            self.output_manager(s3, output_name, output_data, context, sheet)
 
         dag_id = context['ti'].dag_id
 
@@ -144,18 +157,14 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
         return boa.constrict(title)
 
-    def output_manager(self, s3, output_name, output_data, context, sheet_name, schema_name=None):
-        self.s3_bucket = BaseHook.get_connection(self.s3_conn_id).host
+    def output_manager(self, s3, output_name, output_data, context, sheet_name):
         if self.output_format == 'json':
-            output = '\n'.join([json.dumps({boa.constrict(str(k)): v
-                                            for k, v in record.items()})
-                                for record in output_data])
 
             enc_output = str.encode(output, 'utf-8')
 
             # if file is more than bound then apply gzip compression
             if len(enc_output) / 1024 / 1024 >= self.compression_bound:
-                logging.info("File is more than {}MB, gzip compression will be applied".format(self.compression_bound))
+                print("File is more than {}MB, gzip compression will be applied".format(self.compression_bound))
                 output = gzip.compress(enc_output, compresslevel=5)
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="compressed")
                 self.load_bytes(s3,
@@ -165,7 +174,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
                                 replace=True
                                 )
             else:
-                logging.info("File is less than {}MB, compression will not be applied".format(self.compression_bound))
+                print("File is less than {}MB, compression will not be applied".format(self.compression_bound))
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="non-compressed")
                 s3.load_string(
                     string_data=output,
@@ -182,12 +191,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
                 s3.load_string(
                     string_data=json.dumps(schema),
-                    key=schema_name,
+                    key=output_name,
                     bucket_name=self.s3_bucket,
                     replace=True
                 )
 
-            logging.info('Successfully output of "{}" to S3.'.format(output_name))
+            print('Successful output of "{}" to S3.'.format(output_name))
 
         # TODO -- Add support for csv output
 

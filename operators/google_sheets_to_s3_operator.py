@@ -160,15 +160,15 @@ class GoogleSheetsToS3Operator(BaseOperator):
     def output_manager(self, s3, output_name, output_data, context, sheet_name):
         if self.output_format == 'json':
 
-            enc_output = str.encode(output, 'utf-8')
+            enc_output = str.encode(output_data, 'utf-8')
 
             # if file is more than bound then apply gzip compression
             if len(enc_output) / 1024 / 1024 >= self.compression_bound:
                 print("File is more than {}MB, gzip compression will be applied".format(self.compression_bound))
-                output = gzip.compress(enc_output, compresslevel=5)
+                output_data = gzip.compress(enc_output, compresslevel=5)
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="compressed")
                 self.load_bytes(s3,
-                                bytes_data=output,
+                                bytes_data=output_data,
                                 key=output_name,
                                 bucket_name=self.s3_bucket,
                                 replace=True
@@ -177,7 +177,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
                 print("File is less than {}MB, compression will not be applied".format(self.compression_bound))
                 self.xcom_push(context, key='is_compressed_{}'.format(sheet_name), value="non-compressed")
                 s3.load_string(
-                    string_data=output,
+                    string_data=output_data,
                     key=output_name,
                     bucket_name=self.s3_bucket,
                     replace=True

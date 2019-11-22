@@ -59,7 +59,7 @@ class GoogleSheetsToS3Operator(BaseOperator):
         self.sheet_id = sheet_id
         self.sheet_names = sheet_names
         self.s3_conn_id = s3_conn_id
-        self.s3_path = s3_path
+        self.s3_path = s3_path.strip('/')
         self.include_schema = include_schema
         self.range = range
         self.output_format = output_format.lower()
@@ -135,24 +135,14 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
             sheet = boa.constrict(sheet)
 
-            if self.s3_path[-1] != '/':
-                self.s3_path = ''.join([self.s3_path, '/'])
-
-            if self.s3_path[0] == '/':
-                self.s3_path = self.s3_path[1:]
-
-            output_name = ''.join([self.s3_path, sheet,
-                                   '.', self.output_format])
-
             if self.include_schema is True:
-                schema_name = ''.join([self.s3_path, sheet,
+                output_name = ''.join([self.s3_path, '/', sheet,
                                       '_schema', '.', self.output_format])
-                self.output_manager(s3, output_name, output_data,
-                                    context, sheet, schema_name)
             else:
-                self.output_manager(s3, output_name, output_data,
-                                    context, sheet)
+                output_name = ''.join([self.s3_path, '/', sheet,
+                                       '.', self.output_format])
 
+            self.output_manager(s3, output_name, output_data, context, sheet)
 
         dag_id = context['ti'].dag_id
 
@@ -162,11 +152,8 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
         return boa.constrict(title)
 
-    def output_manager(self, s3, output_name, output_data, context, sheet_name,
-                        schema_name=None):
+    def output_manager(self, s3, output_name, output_data, context, sheet_name):
         if self.output_format == 'json':
-            output = [json.dumps({k: v for k, v in record.items()})
-                      for record in output_data]
 
             enc_output = str.encode(output, 'utf-8')
 
@@ -199,12 +186,12 @@ class GoogleSheetsToS3Operator(BaseOperator):
 
                 s3.load_string(
                     string_data=json.dumps(schema),
-                    key=schema_name,
+                    key=output_name,
                     bucket_name=self.s3_bucket,
                     replace=True
                 )
 
-            print('Successfully output of "{}" to S3.'.format(output_name))
+            print('Successful output of "{}" to S3.'.format(output_name))
 
         # TODO -- Add support for csv output
 
